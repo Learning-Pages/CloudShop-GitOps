@@ -1,0 +1,2 @@
+flowchart LR
+ Dev[Developer]-->Git[GitHub]; Git-->CI[Actions: test/build/Trivy]; CI-->Reg[Registry]; Git-->Argo[Argo CD]; Argo-->K8s[Kubernetes]; K8s-->Obs[Prometheus/Grafana]

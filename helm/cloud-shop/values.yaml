@@ -1,0 +1,3 @@
+apiImage: ghcr.io/your-github-user/argo-gitops-ecommerce-api:latest
+apiReplicas: 1
+postgresPassword: change-me

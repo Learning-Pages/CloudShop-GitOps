@@ -1,0 +1,8 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: cloud-shop,namespace: argocd}
+spec:
+ project: default
+ source: {repoURL: https://github.com/your-github-user/argo-gitops-ecommerce.git,targetRevision: main,path: kubernetes/overlays/local}
+ destination: {server: https://kubernetes.default.svc,namespace: ecommerce}
+ syncPolicy: {automated: {prune: true,selfHeal: true},syncOptions: [CreateNamespace=true]}

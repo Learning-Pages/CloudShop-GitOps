@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: ecommerce}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: shop-config,namespace: ecommerce}
+data: {POSTGRES_DB: shop,POSTGRES_USER: shop,APP_VERSION: "1.0.0"}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: postgres-data,namespace: ecommerce}
+spec: {accessModes: [ReadWriteOnce],resources: {requests: {storage: 1Gi}}}
+---
+apiVersion: v1
+kind: Deployment
+metadata: {name: postgres,namespace: ecommerce}
+spec:
+ replicas: 1
+ selector: {matchLabels: {app: postgres}}
+ template:
+  metadata: {labels: {app: postgres}}
+  spec:
+   containers:
+   - name: postgres
+     image: postgres:16-alpine
+     env: [{name: POSTGRES_DB,value: shop},{name: POSTGRES_USER,value: shop},{name: POSTGRES_PASSWORD,valueFrom: {secretKeyRef: {name: shop-secrets,key: POSTGRES_PASSWORD}}}]
+     volumeMounts: [{name: data,mountPath: /var/lib/postgresql/data}]
+   volumes: [{name: data,persistentVolumeClaim: {claimName: postgres-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres,namespace: ecommerce}
+spec: {selector: {app: postgres},ports: [{port: 5432}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: shop-api,namespace: ecommerce}
+spec:
+ replicas: 1
+ selector: {matchLabels: {app: shop-api}}
+ template:
+  metadata: {labels: {app: shop-api}}
+  spec:
+   securityContext: {runAsNonRoot: true}
+   containers:
+   - name: api
+     image: ghcr.io/your-github-user/argo-gitops-ecommerce-api:latest
+     ports: [{containerPort: 8000}]
+     env: [{name: DATABASE_URL,value: postgresql://shop@postgres:5432/shop},{name: PGPASSWORD,valueFrom: {secretKeyRef: {name: shop-secrets,key: POSTGRES_PASSWORD}}}]
+     readinessProbe: {httpGet: {path: /readyz,port: 8000},initialDelaySeconds: 10}
+     livenessProbe: {httpGet: {path: /healthz,port: 8000},initialDelaySeconds: 15}
+     resources: {requests: {cpu: 50m,memory: 96Mi},limits: {cpu: 300m,memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shop-api,namespace: ecommerce}
+spec: {selector: {app: shop-api},ports: [{port: 8000}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: shop-frontend,namespace: ecommerce}
+spec:
+ replicas: 1
+ selector: {matchLabels: {app: shop-frontend}}
+ template:
+  metadata: {labels: {app: shop-frontend}}
+  spec:
+   containers:
+   - name: frontend
+     image: ghcr.io/your-github-user/argo-gitops-ecommerce-frontend:latest
+     ports: [{containerPort: 80}]
+     resources: {requests: {cpu: 20m,memory: 32Mi},limits: {cpu: 100m,memory: 64Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shop-frontend,namespace: ecommerce}
+spec: {selector: {app: shop-frontend},ports: [{port: 80}]}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: shop,namespace: ecommerce}
+spec:
+ ingressClassName: nginx
+ rules:
+ - host: shop.local
+   http:
+    paths:
+    - {path: /api,pathType: Prefix,backend: {service: {name: shop-api,port: {number: 8000}}}}
+    - {path: /healthz,pathType: Prefix,backend: {service: {name: shop-api,port: {number: 8000}}}}
+    - {path: /,pathType: Prefix,backend: {service: {name: shop-frontend,port: {number: 80}}}}
