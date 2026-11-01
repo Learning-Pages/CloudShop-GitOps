@@ -1,0 +1,17 @@
+name: CI
+on: [push,pull_request]
+permissions: {contents: read,packages: write}
+jobs:
+ build:
+  runs-on: ubuntu-latest
+  steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-python@v5
+    with: {python-version: '3.12'}
+  - run: pip install -r backend/requirements.txt && python -m compileall backend/app
+  - uses: docker/build-push-action@v6
+    with: {context: ./backend,push: false,tags: cloud-shop-api:test}
+  - uses: docker/build-push-action@v6
+    with: {context: ./frontend,push: false,tags: cloud-shop-frontend:test}
+  - uses: aquasecurity/trivy-action@0.28.0
+    with: {image-ref: cloud-shop-api:test,format: table,exit-code: '1',ignore-unfixed: true}
